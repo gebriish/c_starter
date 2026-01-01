@@ -1,0 +1,178 @@
+#ifndef BASE_CORE_H
+#define BASE_CORE_H
+
+#include "base_context.h"
+
+////////////////////////////////
+// ~geb: Foreign Includes
+
+#include <stdio.h>
+#include <stdarg.h>
+#include <math.h>
+#include <string.h>
+#include <stdint.h>
+
+////////////////////////////////
+// ~geb: Useful macros
+
+#define internal      static
+#define global        static
+#define local_persist static
+
+#define Enum(name, type) typedef type name; enum
+
+#define Byte(n) (n) // just for semantic clarity
+#define KB(n)   (((usize)(n)) << 10)
+#define MB(n)   (((usize)(n)) << 20)
+#define GB(n)   (((usize)(n)) << 30)
+
+#define Min(A,B) (((A)<(B))?(A):(B))
+#define Max(A,B) (((A)>(B))?(A):(B))
+#define Clamp(A,X,B) (((X)<(A))?(A):((X)>(B))?(B):(X))
+#define Lerp(a, b, t) ((a) + ((b) - (a)) * t)
+
+#if COMPILER_MSVC
+# define AlignOf(T) __alignof(T)
+#elif COMPILER_CLANG
+# define AlignOf(T) __alignof(T)
+#elif COMPILER_GCC
+# define AlignOf(T) __alignof__(T)
+#else
+# error AlignOf not defined for this compiler.
+#endif
+
+#define DEFAULT_ALIGNMENT AlignOf(void*) * 2
+
+#define OffsetOf(s,m) ((size_t)&(((s*)0)->m))
+
+#if COMPILER_CLANG || COMPILER_GCC
+# define force_inline inline __attribute__((always_inline))
+#elif COMPILER_MSVC
+# define force_inline __forceinline
+#else
+# define force_inline inline
+#endif
+
+////////////////////////////////
+// ~geb: Mem operations
+
+#define MemMove(dst, src, size)   memmove((dst), (src), (size))
+#define MemZero(dst, size)        memset((dst), 0x00, (size))
+#define MemZeroStruct(dst)        memset((dst), 0x00, (sizeof(*dst)))
+#define MemCompare(a, b, size)    memcmp((a), (b), (size))
+#define MemStrlen(ptr)            strlen(ptr)
+
+#if COMPILER_MSVC
+# define Trap() __debugbreak()
+#elif COMPILER_CLANG || COMPILER_GCC
+# define Trap() __builtin_trap()
+#else
+# error Unknown trap intrinsic for this compiler.
+#endif
+
+#define NoOp ((void)0)
+
+#include <assert.h>
+#define AssertAlways(x) assert(x)
+#if DEBUG_BUILD
+# define Assert(x) AssertAlways(x)
+#else
+# define Assert(x) NoOp
+#endif
+
+#define StaticAssert(expr, str) _Static_assert(expr, str)
+#define AlignPow2(x,b)     (((x) + (b) - 1)&(~((b) - 1)))
+
+////////////////////////////////
+// ~geb: Type shorthands
+
+typedef uint8_t  u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+
+typedef int8_t   i8;
+typedef int16_t  i16;
+typedef int32_t  i32;
+typedef int64_t  i64;
+
+typedef i8       bool;
+#define true    ((bool)1)
+#define false   ((bool)0)
+
+typedef float    f32;
+typedef double   f64;
+
+#define U8_MAX  0xFF
+#define U16_MAX 0xFFFF
+#define U32_MAX 0xFFFFFFFF
+#define U64_MAX 0xFFFFFFFFFFFFFFFF
+
+#define I8_MIN  (-128)
+#define I8_MAX  127
+#define I16_MIN (-32768)
+#define I16_MAX 32767
+#define I32_MIN (-2147483648)
+#define I32_MAX 2147483647
+#define I64_MIN (-9223372036854775807LL - 1)
+#define I64_MAX 9223372036854775807LL
+
+StaticAssert(sizeof(f32) == 4, "float32 size not correct");
+StaticAssert(sizeof(f64) == 8, "float64 size not correct");
+
+#if ARCH_64BIT
+typedef u64 usize;
+typedef i64 isize;
+
+#define USIZE_MAX U64_MAX
+#else
+typedef u32 usize;
+typedef i32 isize;
+
+#define USIZE_MAX U32_MAX
+#endif
+
+#define ANSI_RESET   "\x1b[0m"
+#define ANSI_RED     "\x1b[31m"
+#define ANSI_YELLOW  "\x1b[33m"
+#define ANSI_GREEN   "\x1b[32m"
+
+#if DEBUG_BUILD
+
+# define _log_base(stream, color, level, fmt, ...)    \
+do {                                                  \
+	fprintf(stream, "%s %s: %s:%d (%s): %s" fmt "\n",   \
+	        color, level, __FILE__, __LINE__, __func__, \
+	        ANSI_RESET, ##__VA_ARGS__);                 \
+} while (0)
+
+# define log_trace(fmt, ...)  _log_base(stdout, ANSI_GREEN,  "  INFO    ",  fmt, ##__VA_ARGS__)
+# define log_warn(fmt,  ...)  _log_base(stderr, ANSI_YELLOW, "  WARN    ",  fmt, ##__VA_ARGS__)
+# define log_error(fmt, ...)  _log_base(stderr, ANSI_RED,    "< ERROR > ", fmt, ##__VA_ARGS__)
+
+#else
+# define log_trace(fmt, ...) ((void)(0))
+# define log_warn(fmt,  ...) ((void)(0))
+# define log_error(fmt, ...) ((void)(0))
+#endif
+
+
+typedef struct Source_Code_Location Source_Code_Location;
+struct Source_Code_Location {
+	const char *file_path;
+	const char *procedure;
+	int line;
+};
+
+#define Code_Location          \
+    ((Source_Code_Location){   \
+        .file_path = __FILE__, \
+        .procedure = __func__, \
+        .line      = __LINE__, \
+    })
+
+
+#define DeferScope(begin, end) for(int _i_  = ((begin), 0); !_i_; _i_ += 1, (end))
+
+#endif
+
