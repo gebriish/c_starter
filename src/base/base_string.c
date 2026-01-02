@@ -71,7 +71,7 @@ str8_equal(String8 s1, String8 s2)
 
 
 internal string8_list
-str8_array_from_cstring_array(Arena *arena, usize count, char **cstrings)
+str8_list_from_cstring_array(Arena *arena, usize count, char **cstrings)
 {
 	Assert(arena);
 	Assert(count != 0 && cstrings);
