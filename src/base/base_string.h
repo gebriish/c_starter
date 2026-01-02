@@ -2,7 +2,7 @@
 #define BASE_STRING_H
 
 #include "base_core.h"
-#include "base_list.h"
+#include "base_collections.h"
 #include "base_arena.h"
 
 typedef struct String8 String8; // UTF-8 String

@@ -96,9 +96,11 @@ typedef int16_t  i16;
 typedef int32_t  i32;
 typedef int64_t  i64;
 
-typedef i8       bool;
+#if IS_C
+typedef u8       bool;
 #define true    ((bool)1)
 #define false   ((bool)0)
+#endif
 
 typedef float    f32;
 typedef double   f64;
