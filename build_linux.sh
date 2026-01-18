@@ -4,10 +4,8 @@ build="bin"
 bin="sandbox"
 src="src/main.c"
 
-SYSLIBS="-lm"
-
 rm -rf "$build"
 mkdir -p "$build"
 
-echo "$src -> $build/$bin"
-clang "$src" -o "$build/$bin" $SYSLIBS -g -std=c11
+echo "Compiling $src -> $build/$bin"
+clang $src -o $build/$bin -std=c11 -lm -lX11 -lGL -lXrandr
