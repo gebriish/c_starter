@@ -2,13 +2,10 @@
 
 #include "base.c"
 
-int main() {
+int main(int argc, const char **argv) {
 	Allocator arena = arena_allocator(Mb(512));
 
-	{
-		Arena_Scope scope = arena_scope_begin(cast(Arena *)arena.data);
-
-
-		arena_scope_end(scope);
-	}
+	String8_List args = str8_make_list(
+		argv, (usize) argc, arena 
+	);
 }
