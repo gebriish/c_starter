@@ -12,10 +12,6 @@ echo Compiling %src% -> %build%\%bin%
 
 zig cc %src% ^
     -o %build%\%bin% ^
-    -std=c11 ^
-    -lopengl32 ^
-    -lgdi32 ^
-    -luser32 ^
-    -lshell32
+    -std=c11
 
 endlocal

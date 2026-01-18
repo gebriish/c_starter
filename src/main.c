@@ -1,10 +1,14 @@
 #include "base.h"
-#include "linalg.h"
 
 #include "base.c"
-#include "linalg.c"
-
-const f64 target_dt = 1.0 / 120.0;
 
 int main() {
+	Allocator arena = arena_allocator(Mb(512));
+
+	{
+		Arena_Scope scope = arena_scope_begin(cast(Arena *)arena.data);
+
+
+		arena_scope_end(scope);
+	}
 }

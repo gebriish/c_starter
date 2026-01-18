@@ -157,13 +157,6 @@ heap_allocator(void)
 // ~geb: arena allocator
 #define COMMIT_BLOCK_SIZE Kb(64)
 
-typedef struct Arena {
-	u8 *base;
-	usize reserved;
-	usize committed;
-	usize pos;
-} Arena;
-
 internal Arena *
 _arena_new(usize reserve_size)
 {
@@ -354,6 +347,28 @@ arena_allocator(usize reserve)
 		.proc = arena_allocator_proc,
 		.data = arena
 	};
+}
+
+
+internal Arena_Scope
+arena_scope_begin(Arena *arena)
+{
+	Assert(arena);
+
+	Arena_Scope scope = {
+		.arena = arena,
+		.pos   = arena->pos
+	};
+	return scope;
+}
+
+internal void
+arena_scope_end(Arena_Scope scope)
+{
+	Assert(scope.arena && scope.pos >= scope.arena->pos);
+
+	Arena * arena = scope.arena;
+	arena->pos = scope.pos;
 }
 
 /////////////////////////////////////////////////////////////////////////

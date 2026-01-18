@@ -337,6 +337,22 @@ typedef struct Allocator {
 	void           *data;
 } Allocator;
 
+typedef struct Arena {
+	u8 *base;
+	usize reserved;
+	usize committed;
+	usize pos;
+} Arena;
+
+typedef struct Arena_Scope {
+	Arena *arena;
+	usize pos;
+} Arena_Scope;
+
+internal Arena_Scope arena_scope_begin(Arena *arena);
+internal void arena_scope_end(Arena_Scope scope);
+
+
 #ifndef DEFAULT_MEMORY_ALIGNMENT
 #define DEFAULT_MEMORY_ALIGNMENT cast(usize)(2 * AlignOf(void *))
 #endif
