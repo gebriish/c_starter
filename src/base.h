@@ -302,7 +302,7 @@ typedef u8 bool;
 #if !defined(NO_ASSERT)
 # define Assert(x) AssertAlways(x)
 #else
-# define Assert(x) NoOp
+# define Assert(x) ((void)0)
 #endif
 
 ///////////////////////////////////
@@ -477,6 +477,24 @@ internal String8     str8_list_index(String8_List *list, usize i);
 internal String8 str8_slice(String8 string, usize begin, usize end_exclusive);
 internal bool str8_equal(String8 first, String8 second);
 
+typedef struct {
+	u8 *ptr;
+	u32  width;
+	rune codepoint;
+} Str_Iterator;
+
+typedef u32 UTF8_Error;
+enum {
+	UTF8_Err_None,
+	UTF8_Err_InvalidLead,
+	UTF8_Err_InvalidContinuation,
+	UTF8_Err_Overlong,
+	UTF8_Err_Surrogate,
+	UTF8_Err_OutOfRange
+};
+
+internal bool str8_iter(String8 string, Str_Iterator *it);
+internal rune utf8_decode(u8 *ptr, UTF8_Error *err);
 
 ///////////////////////////////////
 // ~geb: OS layer
@@ -514,7 +532,7 @@ enum {
   OS_FileFlag_Symlink    = Bit(6),
 };
 
-
+// ~geb: time interface
 typedef u64 OS_Time_Stamp;
 
 typedef struct OS_FileProps {
@@ -531,10 +549,9 @@ typedef struct OS_Time_Duration {
 } OS_Time_Duration;
 
 
-internal OS_Time_Stamp os_time_now();
-internal OS_Time_Stamp os_time_frequency();
-internal void os_sleep_ns(u64 ns);
-
+internal OS_Time_Stamp    os_time_now();
+internal OS_Time_Stamp    os_time_frequency();
+internal void             os_sleep_ns(u64 ns);
 internal OS_Time_Duration os_time_diff(OS_Time_Stamp start, OS_Time_Stamp end);
 
 #endif

@@ -375,6 +375,104 @@ arena_scope_end(Arena_Scope scope)
 //                            STRINGS                                  //
 /////////////////////////////////////////////////////////////////////////
 
+global const u8 utf8_len_table[256] = {
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x00–0x0F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x10–0x1F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x20–0x2F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x30–0x3F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x40–0x4F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x50–0x5F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x60–0x6F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x70–0x7F
+
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0x80–0x8F
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0x90–0x9F
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0xA0–0xAF
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0xB0–0xBF
+
+	2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, // 0xC0–0xCF
+	2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, // 0xD0–0xDF
+	3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3, // 0xE0–0xEF
+
+	4,4,4,4,4,4,4,4,  // F0–F7
+	0,0,0,0,0,0,0,0   // F8–FF (invalid in UTF-8)
+};
+
+
+force_inline bool utf8_is_cont(u8 b) {
+	return (b & 0xC0) == 0x80;
+}
+
+internal rune
+utf8_decode(u8 *ptr, UTF8_Error *err)
+{
+	Assert(ptr);
+    if (err) *err = UTF8_Err_None;
+
+
+    u8 *p = ptr;
+    u8 b0 = p[0];
+
+    u8 len = utf8_len_table[b0];
+    if (len == 0) {
+        if (err) *err = UTF8_Err_InvalidLead;
+        return 0;
+    }
+
+    rune r = 0;
+
+    switch (len) {
+    case 1:
+        r = b0;
+        break;
+
+    case 2:
+        if (!utf8_is_cont(p[1])) goto invalid_cont;
+        r = ((b0 & 0x1F) << 6) |
+            (p[1] & 0x3F);
+        if (r < 0x80) goto overlong;
+        break;
+
+    case 3:
+        if (!utf8_is_cont(p[1]) || !utf8_is_cont(p[2])) goto invalid_cont;
+        r = ((b0 & 0x0F) << 12) |
+            ((p[1] & 0x3F) << 6) |
+            (p[2] & 0x3F);
+        if (r < 0x800) goto overlong;
+        if (r >= 0xD800 && r <= 0xDFFF) goto surrogate;
+        break;
+
+    case 4:
+        if (!utf8_is_cont(p[1]) || !utf8_is_cont(p[2]) || !utf8_is_cont(p[3]))
+            goto invalid_cont;
+        r = ((b0 & 0x07) << 18) |
+            ((p[1] & 0x3F) << 12) |
+            ((p[2] & 0x3F) << 6) |
+            (p[3] & 0x3F);
+        if (r < 0x10000) goto overlong;
+        if (r > 0x10FFFF) goto out_of_range;
+        break;
+    }
+
+	return r;
+
+invalid_cont:
+    if (err) *err = UTF8_Err_InvalidContinuation;
+    return 0;
+
+overlong:
+    if (err) *err = UTF8_Err_Overlong;
+    return 0;
+
+surrogate:
+    if (err) *err = UTF8_Err_Surrogate;
+    return 0;
+
+out_of_range:
+    if (err) *err = UTF8_Err_OutOfRange;
+    return 0;
+}
+
 internal String8
 str8_make(const char *cstring, Allocator allocator)
 {
@@ -480,4 +578,33 @@ str8_equal(String8 first, String8 second)
 	}
 
 	return MemCompare(first.str, second.str, first.len) == 0;
+}
+
+internal bool
+str8_iter(String8 string, Str_Iterator *it)
+{
+    Assert(it);
+
+    u8 *end = string.str + string.len;
+
+    if (!it->ptr) {
+        if (string.len == 0) return false;
+        it->ptr = string.str;
+    } else {
+        it->ptr += it->width;
+    }
+
+    if (it->ptr >= end) return false;
+
+    u8 lead = *it->ptr;
+    u32 width = utf8_len_table[lead];
+    Assert(width > 0 && width <= 4);
+    Assert(it->ptr + width <= end);
+
+    UTF8_Error err = UTF8_Err_None;
+    it->codepoint = utf8_decode(it->ptr, &err);
+    Assert(err == UTF8_Err_None);
+
+    it->width = width;
+    return true;
 }

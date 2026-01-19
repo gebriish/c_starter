@@ -12,6 +12,7 @@ echo Compiling %src% -> %build%\%bin%
 
 zig cc %src% ^
     -o %build%\%bin% ^
-    -std=c11
+    -std=c11 ^
+    -O2
 
 endlocal
