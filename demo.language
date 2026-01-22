@@ -1,0 +1,25 @@
+io := #import("std:io")
+
+string := []u8
+
+Entity := struct {
+	name: string,
+	age: u8,
+	salary: f32
+}
+
+add := fn(a: int, b: int) int {
+	return a + b
+}
+
+main := fn() {
+	io.println("hello, world")
+
+	x = 32 
+	var y = x - 21
+	y += 11
+
+	y = add(x, y)
+
+	io.println(y)
+}

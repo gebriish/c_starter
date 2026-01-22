@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <errno.h>
 
 #include "../base.h"
 

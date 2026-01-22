@@ -237,7 +237,7 @@ typedef u8 bool;
 #  define USIZE_MAX U32_MAX
 #  define ISIZE_MAX I32_MAX
 # elif ARCH_64BIT
-#  define USIZE_MAX U32_MAX
+#  define USIZE_MAX U64_MAX
 #  define ISIZE_MAX I64_MAX
 # endif
 #endif
@@ -451,6 +451,13 @@ internal Allocator arena_allocator(usize reserve);
 // for simplicity it is best to use
 // arena allocators for strings
 
+#define RUNE_SELF 0x80
+#define RUNE_BOM 0xfeff
+#define MAX_RUNE         0x0010ffff // Maximum valid unicode code point
+#define REPLACEMENT_CHAR 0xfffd     // Represented an invalid code point
+#define MAX_ASCII        0x007f     // Maximum ASCII value
+#define MAX_LATIN1       0x00ff     // Maximum Latin-1 value
+
 typedef struct {
 	Allocator alloc;
 	usize len;
@@ -462,6 +469,29 @@ typedef struct {
 	String8 *array;
 	usize size;
 } String8_List;
+
+global const u8 UTF8_LEN_TABLE[256] = {
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x00–0x0F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x10–0x1F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x20–0x2F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x30–0x3F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x40–0x4F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x50–0x5F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x60–0x6F
+	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x70–0x7F
+
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0x80–0x8F
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0x90–0x9F
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0xA0–0xAF
+	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0xB0–0xBF
+
+	2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, // 0xC0–0xCF
+	2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, // 0xD0–0xDF
+	3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3, // 0xE0–0xEF
+
+	4,4,4,4,4,4,4,4,  // F0–F7
+	0,0,0,0,0,0,0,0   // F8–FF (invalid in UTF-8)
+};
 
 #define S(x) (String8) { .len = cast(usize) sizeof(x) - 1, .str = cast(u8 *) x }
 #define STR "%.*s"
@@ -476,6 +506,8 @@ internal String8     str8_list_index(String8_List *list, usize i);
 
 internal String8 str8_slice(String8 string, usize begin, usize end_exclusive);
 internal bool str8_equal(String8 first, String8 second);
+internal String8 str8_copy(String8 string, Allocator alloc);
+internal String8 str8_copy_cstring(String8 string, Allocator alloc);
 
 typedef struct {
 	u8 *ptr;
@@ -495,6 +527,10 @@ enum {
 
 internal bool str8_iter(String8 string, Str_Iterator *it);
 internal rune utf8_decode(u8 *ptr, UTF8_Error *err);
+
+internal bool is_letter(rune r);
+
+
 
 ///////////////////////////////////
 // ~geb: OS layer
@@ -516,9 +552,10 @@ typedef u32 OS_AccesFlags;
 enum {
   OS_AccessFlag_Read       = Bit(0),
   OS_AccessFlag_Write      = Bit(1),
-  OS_AccessFlag_Execute    = Bit(2),
-  OS_AccessFlag_ShareRead  = Bit(3),
-  OS_AccessFlag_ShareWrite = Bit(4),
+  OS_AccessFlag_Append     = Bit(2),
+  OS_AccessFlag_Execute    = Bit(3),
+  OS_AccessFlag_ShareRead  = Bit(4),
+  OS_AccessFlag_ShareWrite = Bit(5),
 };
 
 typedef u32 OS_FileFlags;
@@ -532,15 +569,24 @@ enum {
   OS_FileFlag_Symlink    = Bit(6),
 };
 
-// ~geb: time interface
 typedef u64 OS_Time_Stamp;
-
 typedef struct OS_FileProps {
 	usize        size;
 	OS_FileFlags flags;
 	OS_Time_Stamp created;
 	OS_Time_Stamp modified;
 } OS_FileProps;
+
+internal OS_Handle    os_file_open(OS_AccesFlags flags, String8 path, Allocator temp_alloc);
+internal void         os_file_close(OS_Handle file);
+internal usize        os_file_read(OS_Handle file, usize begin, usize end, void *out_data);
+internal usize        os_file_write(OS_Handle file, usize begin, usize end, void *data);
+internal OS_FileProps os_properties_from_file(OS_Handle file);
+
+internal String8      os_data_from_path(String8 path, Allocator alloc, Allocator scratch);
+internal bool         os_write_to_path(String8 path, String8 data, Allocator scratch);
+
+// ~geb: time interface
 
 typedef struct OS_Time_Duration {
 	f64 seconds;

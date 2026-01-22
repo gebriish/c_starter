@@ -27,6 +27,39 @@ os_time_diff(OS_Time_Stamp start, OS_Time_Stamp end)
 	return result;
 }
 
+internal String8
+os_data_from_path(String8 path, Allocator alloc, Allocator scratch)
+{
+	OS_Handle file = os_file_open(OS_AccessFlag_Read, path, scratch);
+	OS_FileProps props = os_properties_from_file(file);
+	
+	u8 *mem = alloc_array(alloc, u8, props.size, NULL);
+	os_file_read(file, 0, props.size, mem);
+
+	String8 data = {
+		.alloc = alloc,
+		.str = mem,
+		.len = props.size
+	};
+
+	os_file_close(file);
+	return data;
+}
+
+internal bool
+os_write_to_path(String8 path, String8 data, Allocator scratch)
+{
+  bool good = 0;
+  OS_Handle file = os_file_open(OS_AccessFlag_Write, path, scratch);
+  if(file.u64[0])
+  {
+    usize bytes_written = os_file_write(file, 0, data.len, data.str);
+    good = (bytes_written == data.len);
+    os_file_close(file);
+  }
+  return good;
+}
+
 /////////////////////////////////////////////////////////////////////////
 //                        ALLOCATORS                                   //
 /////////////////////////////////////////////////////////////////////////
@@ -34,6 +67,7 @@ os_time_diff(OS_Time_Stamp start, OS_Time_Stamp end)
 // ~geb: general perpose (gp) allocator
 
 #include <stdlib.h>
+
 force_inline void*
 heap_realloc(void *original_ptr, usize new_size) {
 	return realloc(original_ptr, new_size);
@@ -375,32 +409,9 @@ arena_scope_end(Arena_Scope scope)
 //                            STRINGS                                  //
 /////////////////////////////////////////////////////////////////////////
 
-global const u8 utf8_len_table[256] = {
-	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x00–0x0F
-	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x10–0x1F
-	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x20–0x2F
-	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x30–0x3F
-	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x40–0x4F
-	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x50–0x5F
-	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x60–0x6F
-	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x70–0x7F
-
-	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0x80–0x8F
-	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0x90–0x9F
-	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0xA0–0xAF
-	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // 0xB0–0xBF
-
-	2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, // 0xC0–0xCF
-	2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, // 0xD0–0xDF
-	3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3, // 0xE0–0xEF
-
-	4,4,4,4,4,4,4,4,  // F0–F7
-	0,0,0,0,0,0,0,0   // F8–FF (invalid in UTF-8)
-};
-
 
 force_inline bool utf8_is_cont(u8 b) {
-	return (b & 0xC0) == 0x80;
+	return (b & 0xC0) == RUNE_SELF;
 }
 
 internal rune
@@ -413,7 +424,7 @@ utf8_decode(u8 *ptr, UTF8_Error *err)
     u8 *p = ptr;
     u8 b0 = p[0];
 
-    u8 len = utf8_len_table[b0];
+    u8 len = UTF8_LEN_TABLE[b0];
     if (len == 0) {
         if (err) *err = UTF8_Err_InvalidLead;
         return 0;
@@ -430,7 +441,7 @@ utf8_decode(u8 *ptr, UTF8_Error *err)
         if (!utf8_is_cont(p[1])) goto invalid_cont;
         r = ((b0 & 0x1F) << 6) |
             (p[1] & 0x3F);
-        if (r < 0x80) goto overlong;
+        if (r < RUNE_SELF) goto overlong;
         break;
 
     case 3:
@@ -471,6 +482,40 @@ surrogate:
 out_of_range:
     if (err) *err = UTF8_Err_OutOfRange;
     return 0;
+}
+
+
+internal bool is_letter(rune r)
+{
+	if (r < RUNE_SELF) {
+		if (
+			(r >= 'A' && r <= 'Z') ||
+			(r >= 'a' && r <= 'z') ||
+			r == '_'
+		) {
+			return true;
+		}
+		return false;
+	}
+
+	// general unicode is_letter
+	if (r <= MAX_LATIN1) {
+		return char_properties[u8(r)]&pLmask != 0
+	}
+	if is_upper(r) || is_lower(r) {
+		return true
+	}
+
+	c := i32(r)
+	p := binary_search(c, alpha_ranges[:], len(alpha_ranges)/2, 2)
+	if p >= 0 && alpha_ranges[p] <= c && c <= alpha_ranges[p+1] {
+		return true
+	}
+	p = binary_search(c, alpha_singlets[:], len(alpha_singlets), 1)
+	if p >= 0 && c == alpha_singlets[p] {
+		return true
+	}
+	return false
 }
 
 internal String8
@@ -580,6 +625,33 @@ str8_equal(String8 first, String8 second)
 	return MemCompare(first.str, second.str, first.len) == 0;
 }
 
+internal String8
+str8_copy(String8 string, Allocator alloc)
+{
+	u8 *mem = alloc_array(alloc, u8, string.len, NULL);
+	MemMove(mem, string.str, string.len);
+	String8 str = {
+		.alloc = alloc,
+		.str = mem,
+		.len = string.len
+	};
+	return str;
+}
+
+internal String8
+str8_copy_cstring(String8 string, Allocator alloc)
+{
+	u8 *mem = alloc_array(alloc, u8, string.len + 1, NULL);
+	MemMove(mem, string.str, string.len);
+	mem[string.len] = '\0';
+	String8 str = {
+		.alloc = alloc,
+		.str = mem,
+		.len = string.len + 1
+	};
+	return str;
+}
+
 internal bool
 str8_iter(String8 string, Str_Iterator *it)
 {
@@ -597,7 +669,7 @@ str8_iter(String8 string, Str_Iterator *it)
     if (it->ptr >= end) return false;
 
     u8 lead = *it->ptr;
-    u32 width = utf8_len_table[lead];
+    u32 width = UTF8_LEN_TABLE[lead];
     Assert(width > 0 && width <= 4);
     Assert(it->ptr + width <= end);
 
