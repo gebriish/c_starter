@@ -1,0 +1,8 @@
+CompileFlags:
+  Add:
+    - -std=c99
+    - -w
+    - -x
+    - c
+Diagnostics:
+  UnusedIncludes: None

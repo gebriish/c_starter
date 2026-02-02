@@ -8,4 +8,4 @@ rm -rf "$build"
 mkdir -p "$build"
 
 echo "compiling ($src) -> $build/$bin"
-clang $src -o $build/$bin -std=c11
+clang $src -o $build/$bin -std=c99
