@@ -260,6 +260,7 @@ typedef u8 bool;
 # error AlignOf not defined for this compiler.
 #endif
 
+#define OffsetOf(type, member) offsetof(type, member)
 #define AlignPow2(x,b)     (((x) + (b) - 1)&(~((b) - 1)))
 
 #define global        static
@@ -267,7 +268,7 @@ typedef u8 bool;
 #define local_persist static 
 
 #define Bit(x) (1u << (x))
-#define MaskCheck(flags, mask) (((flags) & (mask)) != 0)
+#define MaskCheck(flags, mask) cast(bool)(((flags) & (mask)) != 0)
 #define MaskSet(var, set, mask) do { \
 	if (set) (var) |=  (mask); \
 	else     (var) &= ~(mask); \
@@ -500,6 +501,9 @@ global const u8 UTF8_LEN_TABLE[256] = {
 internal String8 str8_make(const char *cstring, Allocator allocator);
 internal Alloc_Error str8_delete(String8 *str);
 
+internal isize find_left(String8 str, rune c);
+internal isize find_right(String8 str, rune c);
+
 internal String8_List str8_make_list(const char **cstrings, usize count, Allocator allocator);
 internal Alloc_Error str8_delete_list(String8_List *list);
 internal String8     str8_list_index(String8_List *list, usize i);
@@ -508,6 +512,8 @@ internal String8 str8_slice(String8 string, usize begin, usize end_exclusive);
 internal bool str8_equal(String8 first, String8 second);
 internal String8 str8_copy(String8 string, Allocator alloc);
 internal String8 str8_copy_cstring(String8 string, Allocator alloc);
+
+internal String8 str8_file_extension(String8 path);
 
 typedef struct {
 	u8 *ptr;
@@ -529,6 +535,7 @@ internal bool str8_iter(String8 string, Str_Iterator *it);
 internal rune utf8_decode(u8 *ptr, UTF8_Error *err);
 
 internal bool is_letter(rune r);
+internal bool is_space(rune r);
 
 
 

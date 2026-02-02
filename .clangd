@@ -1,8 +1,0 @@
-CompileFlags:
-  Add:
-    - -std=c11
-    - -w
-    - -x
-    - c
-Diagnostics:
-  UnusedIncludes: None
