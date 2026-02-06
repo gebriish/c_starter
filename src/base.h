@@ -22,7 +22,7 @@
 # elif defined(__APPLE__) && defined(__MACH__)
 #  define OS_MAC 1
 # else
-#  error This compiler/OS combo is not supported.
+#  error This OS is not supported.
 # endif
 
 # if defined(__amd64__) || defined(__amd64) || defined(__x86_64__) || defined(__x86_64)
@@ -333,19 +333,19 @@ void *name(void *allocator_data, AllocationType type,   \
 					 Alloc_Error *err)
 typedef Allocator_Proc(Allocator_Proc);
 
-typedef struct Allocator {
+typedef struct {
 	Allocator_Proc *proc;
 	void           *data;
 } Allocator;
 
-typedef struct Arena {
+typedef struct {
 	u8 *base;
 	usize reserved;
 	usize committed;
 	usize pos;
 } Arena;
 
-typedef struct Arena_Scope {
+typedef struct {
 	Arena *arena;
 	usize pos;
 } Arena_Scope;

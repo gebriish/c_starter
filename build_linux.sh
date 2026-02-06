@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
 build="bin"
-bin="yapc"
+bin="sandbox"
 src="src/main.c"
 
 rm -rf "$build"
 mkdir -p "$build"
 
-echo "compiling ($src) -> $build/$bin"
-clang $src -o $build/$bin -std=c99
+echo "Compiling $src -> $build/$bin"
+clang $src -o $build/$bin -std=c11
