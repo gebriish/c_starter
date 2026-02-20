@@ -81,6 +81,27 @@ os_win32_utf16_from_utf8(String8 s, Allocator a)
 
 ///////////////////////
 
+internal OS_Handle
+os_stdout() {
+    OS_Handle h = {0};
+    h.u64[0] = (u64)(uintptr_t)GetStdHandle(STD_OUTPUT_HANDLE);
+    return h;
+}
+
+internal OS_Handle
+os_stdin() {
+    OS_Handle h = {0};
+    h.u64[0] = (u64)(uintptr_t)GetStdHandle(STD_INPUT_HANDLE);
+    return h;
+}
+
+internal OS_Handle
+os_stderr() {
+    OS_Handle h = {0};
+    h.u64[0] = (u64)(uintptr_t)GetStdHandle(STD_ERROR_HANDLE);
+    return h;
+}
+
 internal void *
 os_reserve(usize size)
 {
@@ -168,48 +189,48 @@ os_sleep_ns(u64 ns)
 internal OS_Handle
 os_file_open(OS_AccesFlags flags, String8 path, Allocator temp_alloc)
 {
-    OS_Handle handle = {0};
+	OS_Handle handle = {0};
 
-    WCHAR *wpath = os_win32_utf16_from_utf8(path, temp_alloc);
-    if (!wpath)
-        return handle;
+	WCHAR *wpath = os_win32_utf16_from_utf8(path, temp_alloc);
+	if (!wpath)
+		return handle;
 
-    DWORD access = 0;
-    if (flags & OS_AccessFlag_Read)
-        access |= GENERIC_READ;
-    if (flags & OS_AccessFlag_Write)
-        access |= GENERIC_WRITE;
+	DWORD access = 0;
+	if (flags & OS_AccessFlag_Read)
+		access |= GENERIC_READ;
+	if (flags & OS_AccessFlag_Write)
+		access |= GENERIC_WRITE;
 
-    if (flags & OS_AccessFlag_Append)
-    {
-        access |= FILE_APPEND_DATA;
-    }
+	if (flags & OS_AccessFlag_Append)
+	{
+		access |= FILE_APPEND_DATA;
+	}
 
-    DWORD share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+	DWORD share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
 
-    DWORD creation = OPEN_EXISTING;
-    if (flags & (OS_AccessFlag_Write | OS_AccessFlag_Append))
-    {
-        creation = OPEN_ALWAYS;
-    }
+	DWORD creation = OPEN_EXISTING;
+	if (flags & (OS_AccessFlag_Write | OS_AccessFlag_Append))
+	{
+		creation = OPEN_ALWAYS;
+	}
 
-    DWORD attribs = FILE_ATTRIBUTE_NORMAL;
+	DWORD attribs = FILE_ATTRIBUTE_NORMAL;
 
-    HANDLE h = CreateFileW(
-        wpath,
-        access,
-        share,
-        NULL,
-        creation,
-        attribs,
-        NULL);
+	HANDLE h = CreateFileW(
+		wpath,
+		access,
+		share,
+		NULL,
+		creation,
+		attribs,
+		NULL);
 
-    if (h != INVALID_HANDLE_VALUE)
-    {
-        handle.u64[0] = (u64)h;
-    }
+	if (h != INVALID_HANDLE_VALUE)
+	{
+		handle.u64[0] = (u64)h;
+	}
 
-    return handle;
+	return handle;
 }
 
 internal void

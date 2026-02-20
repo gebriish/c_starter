@@ -1,6 +1,6 @@
 CompileFlags:
   Add:
-    - -std=c99
+    - -std=c11
     - -w
     - -x
     - c

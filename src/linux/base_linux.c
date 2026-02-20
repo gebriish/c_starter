@@ -29,6 +29,30 @@ os_linx_time_from_timespec(struct timespec in)
 
 ///////////////////////
 
+internal OS_Handle
+os_stdout()
+{
+	OS_Handle h = {0};
+	h.u64[0] = cast(u64) STDOUT_FILENO;
+	return h;
+}
+
+internal OS_Handle
+os_stdin()
+{
+	OS_Handle h = {0};
+	h.u64[0] = cast(u64) STDIN_FILENO;
+	return h;
+}
+
+internal OS_Handle
+os_stderr()
+{
+	OS_Handle h = {0};
+	h.u64[0] = cast(u64) STDERR_FILENO;
+	return h;
+}
+
 internal void *
 os_reserve(usize size)
 {
@@ -118,7 +142,7 @@ os_file_open(OS_AccesFlags flags, String8 path, Allocator temp_alloc)
 		handle.u64[0] = fd;
 	}
 
-	str8_delete(&path_copy);
+	str8_delete(temp_alloc, &path_copy);
 	return handle;
 }
 
@@ -140,7 +164,7 @@ os_file_read(OS_Handle file, usize begin, usize end, void *out_data)
   usize total_num_bytes_to_read = end - begin;
   usize total_num_bytes_read = 0;
   usize total_num_bytes_left_to_read = total_num_bytes_to_read;
-  for(;total_num_bytes_left_to_read > 0;)
+  while(total_num_bytes_left_to_read > 0)
   {
     int read_result = pread(fd, (u8 *)out_data + total_num_bytes_read, total_num_bytes_left_to_read, begin + total_num_bytes_read);
     if(read_result >= 0)
@@ -164,7 +188,7 @@ os_file_write(OS_Handle file, usize begin, usize end, void *data)
   usize total_num_bytes_to_write = end - begin;
   usize total_num_bytes_written = 0;
   usize total_num_bytes_left_to_write = total_num_bytes_to_write;
-  for(;total_num_bytes_left_to_write > 0;)
+  while(total_num_bytes_left_to_write > 0)
   {
     int write_result = pwrite(fd, (u8 *)data + total_num_bytes_written, total_num_bytes_left_to_write, begin + total_num_bytes_written);
     if(write_result >= 0)

@@ -36,7 +36,6 @@ os_data_from_path(String8 path, Allocator alloc, Allocator scratch)
 	os_file_read(file, 0, props.size, mem);
 
 	String8 data = {
-		.alloc = alloc,
 		.str = mem,
 		.len = props.size};
 
@@ -206,8 +205,6 @@ heap_allocator(void)
 // ~geb: arena allocator
 #define COMMIT_BLOCK_SIZE Kb(64)
 
-#include <stdio.h>
-
 internal Arena *
 _arena_new(usize reserve_size)
 {
@@ -291,6 +288,9 @@ _arena_alloc_aligned(Arena *arena, usize size, usize alignment, bool zero, Alloc
 	}
 
 	arena->pos = new_pos;
+	if (zero) {
+		MemZero(arena->base + aligned_pos, size);
+	}
 	return arena->base + aligned_pos;
 }
 
@@ -426,14 +426,15 @@ arena_scope_begin(Arena *arena)
 
 	Arena_Scope scope = {
 		.arena = arena,
-		.pos = arena->pos};
+		.pos = arena->pos
+	};
 	return scope;
 }
 
 internal void
 arena_scope_end(Arena_Scope scope)
 {
-	Assert(scope.arena && scope.pos >= scope.arena->pos);
+	Assert(scope.arena && scope.pos <= scope.arena->pos);
 
 	Arena *arena = scope.arena;
 	arena->pos = scope.pos;
@@ -532,20 +533,26 @@ out_of_range:
 	return 0;
 }
 
-internal bool is_letter(rune r)
+internal bool
+is_letter(rune r)
 {
 	if (r < RUNE_SELF)
 	{
-		if (
-			(r >= 'A' && r <= 'Z') ||
+		if ((r >= 'A' && r <= 'Z') ||
 			(r >= 'a' && r <= 'z') ||
-			r == '_')
-		{
+			r == '_') {
 			return true;
 		}
 	}
 
-	return false;
+	return false; // TODO: unicode
+}
+
+internal bool
+is_digit(rune r)
+{
+	if ('0' <= r && r <= '9') { return true; }
+	return false; // TODO: unicode
 }
 
 internal bool
@@ -562,7 +569,6 @@ str8_make(const char *cstring, Allocator allocator)
 {
 	usize len = MemStrlen(cstring);
 	String8 string = {
-		.alloc = allocator,
 		.len = len,
 	};
 
@@ -579,9 +585,9 @@ str8_make(const char *cstring, Allocator allocator)
 }
 
 internal Alloc_Error
-str8_delete(String8 *str)
+str8_delete(Allocator alloc, String8 *str)
 {
-	Allocator a = str->alloc;
+	Allocator a = alloc;
 	if (!a.proc)
 	{
 		return Alloc_Err_Mode_Not_Implemented;
@@ -611,37 +617,36 @@ find_left(String8 str, rune c)
 }
 
 internal isize
-find_right(String8 str, rune c)
+find_right(String8 str, rune target)
 {
-	isize result = -1;
-	for (Str_Iterator itr = {0}; str8_iter(str, &itr);)
-	{
-		if (itr.codepoint == c) {
-			result = cast(isize)(itr.ptr - str.str);
-		}
-	}
-	return result;
+    u8 *p = str.str + str.len;
+
+    while (p > str.str) {
+        p -= 1;
+
+        while (p > str.str && (*p & 0xC0) == RUNE_SELF) {
+            p -= 1;
+        }
+
+        Str_Iterator itr = { .ptr = p };
+        str8_iter(str, &itr);
+
+        if (itr.codepoint == target) {
+            return (isize)(p - str.str);
+        }
+    }
+    return -1;
 }
 
 internal String8_List
 str8_make_list(const char **cstrings, usize count, Allocator allocator)
 {
-	String8_List list = {0};
-
-	list.alloc = allocator;
-	list.size = count;
-
-	Alloc_Error err = 0;
-	list.array = alloc_array(allocator, String8, count, &err);
-
-	if (err)
-	{
-		return (String8_List){0};
-	}
+	String8_List list = dynamic_array(allocator, String8, count);
+	if (!list.data) { return (String8_List){0}; }
 
 	for (usize i = 0; i < count; ++i)
 	{
-		list.array[i] = str8_make(cstrings[i], allocator);
+		dynamic_array_append(&list, String8, str8_make(cstrings[i], allocator));
 	}
 
 	return list;
@@ -656,21 +661,17 @@ str8_delete_list(String8_List *list)
 		return Alloc_Err_Mode_Not_Implemented;
 	}
 
-	for (usize i = 0; i < list->size; ++i)
+	String8 *string_array = cast(String8 *) list->data;
+	for (usize i = 0; i < list->len; ++i)
 	{
-		Alloc_Error err = str8_delete(&list->array[i]);
+		Alloc_Error err = str8_delete(list->alloc, &string_array[i]);
 		if (err)
 		{
 			return err;
 		}
 	}
 
-	Alloc_Error err = 0;
-	mem_free(list->alloc, list->array, &err);
-	if (err)
-	{
-		return err;
-	}
+	dynamic_array_delete(list);
 
 	return Alloc_Err_None;
 }
@@ -679,9 +680,9 @@ internal String8
 str8_list_index(String8_List *list, usize i)
 {
 	Assert(list);
-	Assert(i < list->size);
+	Assert(i < list->len);
 
-	return list->array[i];
+	return (cast(String8 *)(list->data))[i];
 }
 
 internal String8
@@ -714,7 +715,6 @@ str8_copy(String8 string, Allocator alloc)
 	u8 *mem = alloc_array(alloc, u8, string.len, NULL);
 	MemMove(mem, string.str, string.len);
 	String8 str = {
-		.alloc = alloc,
 		.str = mem,
 		.len = string.len};
 	return str;
@@ -727,7 +727,6 @@ str8_copy_cstring(String8 string, Allocator alloc)
 	MemMove(mem, string.str, string.len);
 	mem[string.len] = '\0';
 	String8 str = {
-		.alloc = alloc,
 		.str = mem,
 		.len = string.len + 1};
 	return str;
@@ -736,18 +735,43 @@ str8_copy_cstring(String8 string, Allocator alloc)
 internal String8
 str8_file_extension(String8 path)
 {
-	bool found = false;
-	usize dot_index;
-	for(dot_index = path.len - 1; !found && dot_index >= 0; dot_index -= 1) {
-		if (path.str[dot_index] == '.') {
-			found = true;
+	if (path.len == 0) return S("");
+
+	for (usize i = path.len; i-- > 0; ) {
+		if (path.str[i] == '.') {
+			return str8_slice(path, i + 1, path.len);
+		}
+	}
+
+	return S("");
+}
+
+internal String8
+str8_file_name(String8 path)
+{
+	if (path.len == 0) return S("");
+
+	usize start = 0;
+
+	for (usize i = path.len; i-- > 0;) {
+		rune c = path.str[i];
+		if (c == '/' || c == '\\') {
+			start = i + 1;
 			break;
 		}
 	}
 
-	if (!found) { return S(""); }
+	String8 name = str8_slice(path, start, path.len);
 
-	return str8_slice(path, dot_index + 1, path.len);
+	if (name.len == 0) return name;
+
+	for (usize i = name.len; i-- > 0;) {
+		if (name.str[i] == '.') {
+			if (i == 0) break;
+			return str8_slice(name, 0, i);
+		}
+	}
+	return name;
 }
 
 internal bool
@@ -782,4 +806,115 @@ str8_iter(String8 string, Str_Iterator *it)
 
 	it->width = width;
 	return true;
+}
+
+/////////////////////////////////////////////////////////////////////////
+//                            LOGGER                                   //
+/////////////////////////////////////////////////////////////////////////
+#include <stdio.h>
+#include <stdarg.h>
+
+#define ANSI_RESET   "\x1b[0m"
+#define ANSI_GRAY    "\x1b[90m"
+#define ANSI_GREEN   "\x1b[32m"
+#define ANSI_YELLOW  "\x1b[33m"
+#define ANSI_RED     "\x1b[31m"
+
+internal void log_base(const char* color,
+                     const char* level,
+                     const char* fmt,
+                     va_list args)
+{
+    printf("%s--------[ %s ]--------\n%s", color, level, ANSI_RESET);
+    vprintf(fmt, args);
+    printf("\n");
+}
+
+internal void log_debug(const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    log_base(ANSI_GRAY, "DEBUG", fmt, args);
+    va_end(args);
+}
+
+internal void log_info(const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    log_base(ANSI_GREEN, "INFO ", fmt, args);
+    va_end(args);
+}
+
+internal void log_warn(const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    log_base(ANSI_YELLOW, "WARN ", fmt, args);
+    va_end(args);
+}
+
+internal void log_error(const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    log_base(ANSI_RED, "ERROR", fmt, args);
+    va_end(args);
+}
+
+
+/////////////////////////////////////////////////////////////////////////
+//                      DYNAMIC ARRAY                                  //
+/////////////////////////////////////////////////////////////////////////
+
+
+
+internal void
+dynamic_array_delete(Dynamic_Array *arr)
+{
+	if (arr->data) {
+		Alloc_Error err = 0;
+		mem_free(arr->alloc, arr->data, &err);
+	}
+
+	arr->data = NULL;
+	arr->len = 0;
+	arr->capacity = 0;
+}
+
+
+internal bool
+dynamic_array_reserve(Dynamic_Array *arr, usize elem_size, usize elem_align, usize min_capacity)
+{
+	if (min_capacity <= arr->capacity)
+		return true;
+
+	usize new_capacity = arr->capacity ? arr->capacity : 32;
+	while (new_capacity < min_capacity) {
+		new_capacity <<= 1;
+	}
+
+	Alloc_Error err = 0;
+	void *new_data = mem_resize_aligned(
+		arr->alloc,
+		arr->data,
+		arr->capacity * elem_size,
+		new_capacity * elem_size,
+		elem_align,
+		false,
+		&err
+	);
+
+	if (err)
+		return false;
+
+	arr->data     = new_data;
+	arr->capacity = new_capacity;
+	return true;
+}
+
+internal void
+dynamic_array_clear(Dynamic_Array *arr)
+{
+	arr->len = 0;
 }
