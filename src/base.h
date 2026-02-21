@@ -468,7 +468,7 @@ typedef struct {
 		.capacity = (_capacity), \
 	}
 
-#define dynamic_array_append(arr, T, value) \
+#define dyn_arr_append(arr, T, value) \
 	do { \
 		if ((arr)->len == (arr)->capacity) { \
 			if (!dynamic_array_reserve((arr), sizeof(T), AlignOf(T), (arr)->len + 1)) \
@@ -476,6 +476,10 @@ typedef struct {
 		} \
 		((T *)(arr)->data)[(arr)->len++] = (value); \
 	} while (0)
+
+#define dyn_arr_index(arr, T, i)                         \
+    (Assert((i) < (arr)->len),                           \
+     ((T*)(arr)->data)[(i)])
 
 internal void dynamic_array_delete(Dynamic_Array *arr);
 internal bool dynamic_array_reserve(Dynamic_Array *arr, usize elem_size, usize elem_align, usize min_capacity);
@@ -578,11 +582,7 @@ internal void  os_decommit(void *ptr, usize size);
 internal void  os_release(void *ptr, usize size);
 
 // ~geb: file handling
-typedef union OS_Handle {
-	u64 u64[1];
-	u32 u32[2];
-	u16 u16[4];
-} OS_Handle;
+typedef i32 OS_Handle;
 
 typedef u32 OS_AccesFlags;
 enum {

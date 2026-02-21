@@ -6,8 +6,6 @@
 
 #if OS_LINUX
 #include "linux/base_linux.c"
-#elif OS_WINDOWS
-#include "win32/base_win32.c"
 #else
 #error "OS Implementations missing"
 #endif
@@ -15,11 +13,12 @@
 internal OS_Time_Duration
 os_time_diff(OS_Time_Stamp start, OS_Time_Stamp end)
 {
-	OS_Time_Duration result;
-	u64 freq = os_time_frequency();
+	OS_Time_Duration result = {0};
+
+	u64 freq    = os_time_frequency();
 	u64 elapsed = end - start;
 
-	result.seconds = (f64)elapsed / (f64)freq;
+	result.seconds      = (f64)elapsed / (f64)freq;
 	result.milliseconds = result.seconds * 1000.0;
 	result.microseconds = result.seconds * 1000000.0;
 
@@ -29,32 +28,46 @@ os_time_diff(OS_Time_Stamp start, OS_Time_Stamp end)
 internal String8
 os_data_from_path(String8 path, Allocator alloc, Allocator scratch)
 {
+	String8 result = {0};
+
 	OS_Handle file = os_file_open(OS_AccessFlag_Read, path, scratch);
+	if (file < 0) return result;
+
 	OS_FileProps props = os_properties_from_file(file);
+	if (props.size == 0)
+	{
+		os_file_close(file);
+		return result;
+	}
 
 	u8 *mem = alloc_array(alloc, u8, props.size, NULL);
-	os_file_read(file, 0, props.size, mem);
+	if (!mem)
+	{
+		os_file_close(file);
+		return result;
+	}
 
-	String8 data = {
-		.str = mem,
-		.len = props.size};
+	usize read = os_file_read(file, 0, props.size, mem);
+	if (read == props.size)
+	{
+		result.str = mem;
+		result.len = props.size;
+	}
 
 	os_file_close(file);
-	return data;
+	return result;
 }
 
 internal bool
 os_write_to_path(String8 path, String8 data, Allocator scratch)
 {
-	bool good = 0;
 	OS_Handle file = os_file_open(OS_AccessFlag_Write, path, scratch);
-	if (file.u64[0])
-	{
-		usize bytes_written = os_file_write(file, 0, data.len, data.str);
-		good = (bytes_written == data.len);
-		os_file_close(file);
-	}
-	return good;
+	if (file < 0) return false;
+
+	usize written = os_file_write(file, 0, data.len, data.str);
+	os_file_close(file);
+
+	return (written == data.len);
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -646,7 +659,7 @@ str8_make_list(const char **cstrings, usize count, Allocator allocator)
 
 	for (usize i = 0; i < count; ++i)
 	{
-		dynamic_array_append(&list, String8, str8_make(cstrings[i], allocator));
+		dyn_arr_append(&list, String8, str8_make(cstrings[i], allocator));
 	}
 
 	return list;
